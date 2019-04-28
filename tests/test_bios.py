@@ -21,30 +21,35 @@ class TestBIOS(unittest.TestCase):
                 ops.append(hex(self.cpu.MMU.bios[i]))
             i+=1
 
+        clock_m = 0
         ops = sorted(list(set(ops)))
         print(ops, len(ops))
         self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x31) # LD, SP 0xFFFE
 
         self.cpu.dispatcher()
 
+        clock_m += 3
         self.assertEqual(self.cpu.registers['SP'], 0xFFFE)
-        self.assertEqual(self.cpu.clock['M'], 3)
-        self.assertEqual(self.cpu.clock['T'], 12)
+        self.assertEqual(self.cpu.clock['M'], clock_m)
+        self.assertEqual(self.cpu.clock['T'], clock_m*4)
         self.assertEqual(self.cpu.registers['PC'], 0x3)
         self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0xAF) # XORA
 
         self.cpu.dispatcher()
 
-        self.assertEqual(self.cpu.registers['A'], 0x0000)
-        self.assertEqual(self.cpu.clock['M'], 4)
-        self.assertEqual(self.cpu.clock['T'], 16)
+        clock_m += 1
+        self.assertEqual(self.cpu.registers['A'], 0x00)
+        self.assertEqual(self.cpu.registers['F'], 0x80)
+        self.assertEqual(self.cpu.clock['M'], clock_m)
+        self.assertEqual(self.cpu.clock['T'], clock_m*4)
         self.assertEqual(self.cpu.registers['PC'], 0x4)
         self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x21) # LD HL,0x9FFFF
 
         self.cpu.dispatcher()
+        self.assertEqual(self.cpu.registers['F'], 0x80)
 
+        clock_m += 3
         addr = 0x9FFF
-        clock_m = 7
         while (self.cpu.registers['H'] << 8) + self.cpu.registers['L'] >= 0x8000:
             self.assertEqual(self.cpu.registers['H'], addr >> 8)
             self.assertEqual(self.cpu.registers['L'], addr & 255)
@@ -85,6 +90,8 @@ class TestBIOS(unittest.TestCase):
             else:
                 clock_m += 2
 
+        self.assertEqual(self.cpu.registers['H'], 0x7F)
+        self.assertEqual(self.cpu.registers['L'], 0xFF)
         self.assertEqual(self.cpu.registers['PC'], 0xC)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m*4)
@@ -93,6 +100,7 @@ class TestBIOS(unittest.TestCase):
         self.cpu.dispatcher()
 
         clock_m += 3
+        self.assertEqual(self.cpu.registers['F'], 0xA0)
         self.assertEqual(self.cpu.registers['PC'], 0xF)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m*4)
@@ -101,6 +109,7 @@ class TestBIOS(unittest.TestCase):
         self.cpu.dispatcher()
 
         clock_m += 2
+        self.assertEqual(self.cpu.registers['F'], 0xA0)
         self.assertEqual(self.cpu.registers['PC'], 0x11)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m*4)
@@ -109,6 +118,7 @@ class TestBIOS(unittest.TestCase):
         self.cpu.dispatcher()
 
         clock_m += 2
+        self.assertEqual(self.cpu.registers['F'], 0xA0)
         self.assertEqual(self.cpu.registers['PC'], 0x13)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m*4)
@@ -117,6 +127,7 @@ class TestBIOS(unittest.TestCase):
         self.cpu.dispatcher()
 
         clock_m += 2
+        self.assertEqual(self.cpu.registers['F'], 0xA0)
         self.assertEqual(self.cpu.registers['PC'], 0x14)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m*4)
@@ -125,7 +136,9 @@ class TestBIOS(unittest.TestCase):
         self.cpu.dispatcher()
 
         clock_m += 2
+        self.assertEqual(self.cpu.registers['F'], 0xA0)
         self.assertEqual(self.cpu.registers['PC'], 0x15)
+        self.assertEqual(self.cpu.registers['C'], 0x11)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m * 4)
         self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x0C) # INC C
@@ -133,6 +146,8 @@ class TestBIOS(unittest.TestCase):
         self.cpu.dispatcher()
 
         clock_m += 1
+        self.assertEqual(self.cpu.registers['C'], 0x12)
+        self.assertEqual(self.cpu.registers['F'], 0x00)
         self.assertEqual(self.cpu.registers['PC'], 0x16)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m * 4)
@@ -142,6 +157,7 @@ class TestBIOS(unittest.TestCase):
 
         clock_m += 2
         self.assertEqual(self.cpu.registers['PC'], 0x18)
+        self.assertEqual(self.cpu.registers['F'], 0x00)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m * 4)
         self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0xE2) # LD (0xFF00+C),A
@@ -158,6 +174,7 @@ class TestBIOS(unittest.TestCase):
 
         clock_m += 2
         self.assertEqual(self.cpu.registers['PC'], 0x1A)
+        self.assertEqual(self.cpu.registers['F'], 0x00)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m * 4)
         self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x3E) # LD A,0x77
@@ -166,6 +183,7 @@ class TestBIOS(unittest.TestCase):
 
         clock_m += 2
         self.assertEqual(self.cpu.registers['PC'], 0x1C)
+        self.assertEqual(self.cpu.registers['F'], 0x00)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m * 4)
         self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x77) # LD (HL),A
@@ -174,6 +192,7 @@ class TestBIOS(unittest.TestCase):
 
         clock_m += 2
         self.assertEqual(self.cpu.registers['PC'], 0x1D)
+        self.assertEqual(self.cpu.registers['F'], 0x00)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m * 4)
         self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x3E) # LD A,0xfc
@@ -181,6 +200,13 @@ class TestBIOS(unittest.TestCase):
         self.cpu.dispatcher()
 
         clock_m += 2
+        self.assertEqual(self.cpu.registers['A'], 0xFC)
+        self.assertEqual(self.cpu.registers['B'], 0x00)
+        self.assertEqual(self.cpu.registers['C'], 0x12)
+        self.assertEqual(self.cpu.registers['H'], 0xFF)
+        self.assertEqual(self.cpu.registers['L'], 0x24)
+        self.assertEqual(self.cpu.registers['SP'], 0xFFFE)
+        self.assertEqual(self.cpu.registers['F'], 0x00)
         self.assertEqual(self.cpu.registers['PC'], 0x1F)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m * 4)
@@ -188,11 +214,11 @@ class TestBIOS(unittest.TestCase):
 
         self.cpu.dispatcher()
 
-        clock_m += 3
+        clock_m += 2
         self.assertEqual(self.cpu.registers['PC'], 0x21)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m * 4)
-        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0xE0) # LD DE,$0104
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x11) # LD DE,$0104
 
         self.cpu.dispatcher()
 
@@ -200,4 +226,61 @@ class TestBIOS(unittest.TestCase):
         self.assertEqual(self.cpu.registers['PC'], 0x24)
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m * 4)
-        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0xE0) # LD HL,$8010
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x21) # LD HL,$8010
+
+        self.cpu.dispatcher()
+
+        clock_m += 3
+        self.assertEqual(self.cpu.registers['PC'], 0x27)
+        self.assertEqual(self.cpu.clock['M'], clock_m)
+        self.assertEqual(self.cpu.clock['T'], clock_m * 4)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x1A) # LD A,(DE)
+
+        self.cpu.dispatcher()
+
+        clock_m += 2
+        self.assertEqual(self.cpu.registers['PC'], 0x28)
+        self.assertEqual(self.cpu.clock['M'], clock_m)
+        self.assertEqual(self.cpu.clock['T'], clock_m * 4)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0xCD) # CALL 0x0095
+
+        self.cpu.dispatcher()
+
+        clock_m += 3
+        self.assertEqual(self.cpu.registers['PC'], 0x95)
+        self.assertEqual(self.cpu.clock['M'], clock_m)
+        self.assertEqual(self.cpu.clock['T'], clock_m * 4)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x4F) # LD C,A
+
+        self.cpu.dispatcher()
+
+        clock_m += 1
+        self.assertEqual(self.cpu.registers['PC'], 0x96)
+        self.assertEqual(self.cpu.clock['M'], clock_m)
+        self.assertEqual(self.cpu.clock['T'], clock_m * 4)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x06) # LD B,$04
+
+        self.cpu.dispatcher()
+
+        clock_m += 2
+        self.assertEqual(self.cpu.registers['PC'], 0x98)
+        self.assertEqual(self.cpu.clock['M'], clock_m)
+        self.assertEqual(self.cpu.clock['T'], clock_m * 4)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0xC5) # PUSH BC
+
+        self.cpu.dispatcher()
+
+        clock_m += 4
+        self.assertEqual(self.cpu.registers['PC'], 0x99)
+        self.assertEqual(self.cpu.clock['M'], clock_m)
+        self.assertEqual(self.cpu.clock['T'], clock_m * 4)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0xCB) # RL C
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']+1), 0x11) # RL C
+
+        self.cpu.dispatcher()
+
+        clock_m += 4
+        self.assertEqual(self.cpu.registers['PC'], 0x9B)
+        self.assertEqual(self.cpu.clock['M'], clock_m)
+        self.assertEqual(self.cpu.clock['T'], clock_m * 4)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0xCB) # RLA
