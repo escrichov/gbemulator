@@ -46,8 +46,8 @@ class Mapping():
         self.image.set_data('RGBA', self.width * 4, bytes(self.data))
 
 
-WIDTH = 160
-HEIGHT = 144
+WIDTH = 256
+HEIGHT = 256
 FPS = 60
 window = pyglet.window.Window(width=WIDTH, height=HEIGHT, style=pyglet.window.Window.WINDOW_STYLE_DIALOG)
 window.set_visible()

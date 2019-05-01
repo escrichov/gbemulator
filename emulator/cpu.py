@@ -1,6 +1,8 @@
 
 from emulator.mmu import MMU
+from emulator.gpu import GPU
 from emulator import utils
+from emulator import graphics
 
 class Z80():
     # Flags
@@ -52,6 +54,8 @@ class Z80():
     current_op = 0
 
     def __init__(self):
+        self.window = graphics.Window('Gameboy')
+        self.GPU = GPU(self, self.window)
         self.MMU = MMU(self)
 
     def get_16b_register(self, register_high, register_low):
@@ -62,19 +66,19 @@ class Z80():
         self.registers[register_low] = value & 0xFF
 
     def rb_16b_register(self, register_high, register_low):
-        addr = utils.bytes_to_16(self.register[register_high], self.register[register_low])
+        addr = utils.bytes_to_16(self.registers[register_high], self.registers[register_low])
         return self.MMU.rb(addr)
 
     def wb_16b_register(self, register_high, register_low, value):
-        addr = utils.bytes_to_16(self.register[register_high], self.register[register_low])
+        addr = utils.bytes_to_16(self.registers[register_high], self.registers[register_low])
         self.MMU.wb(addr, value)
 
     def rw_16b_register(self, register_high, register_low):
-        addr = utils.bytes_to_16(self.register[register_high], self.register[register_low])
+        addr = utils.bytes_to_16(self.registers[register_high], self.registers[register_low])
         return self.MMU.rw(addr)
 
     def ww_16b_register(self, register_high, register_low, value):
-        addr = utils.bytes_to_16(self.register[register_high], self.register[register_low])
+        addr = utils.bytes_to_16(self.registers[register_high], self.registers[register_low])
         self.MMU.ww(addr, value)
 
     def push_16b_on_stack(self, value):
@@ -96,11 +100,11 @@ class Z80():
     #   C - Set if carry from bit 7.
     # Use with: n = A,B,C,D,E,H,L,(HL), #
     def op_add_an(self, value):
-        if utils.carry_half_carry_8_bit(self.registers['A'], value):
+        if utils.half_carry_8_bit(self.registers['A'], value):
             half_carry = True
         else:
             half_carry = False
-        if utils.carry_carry_8_bit(self.registers['A'], value):
+        if utils.carry_8_bit(self.registers['A'], value):
             carry = True
         else:
             carry = False
@@ -300,7 +304,7 @@ class Z80():
         self.registers['T'] = 8 # 8 M-time taken
 
     def op_inc(self, register):
-        if utils.carry_half_carry_8_bit(self.registers[register], 1):
+        if utils.half_carry_8_bit(self.registers[register], 1):
             half_carry = 1
         else:
             half_carry = 0
@@ -321,7 +325,7 @@ class Z80():
     def op_inc_hlm(self):
         addr = utils.bytes_to_16(self.registers['H'], self.registers['L'])
         value = self.MMU.rb(addr)
-        if utils.carry_half_carry_8_bit(value, 1):
+        if utils.half_carry_8_bit(value, 1):
             half_carry = 1
         else:
             half_carry = 0
@@ -355,10 +359,17 @@ class Z80():
         self.registers['T'] = 8 # 1 M-time taken
 
     def op_dec(self, register):
+        borrow_bit_4 = utils.half_borrow_8_bit(self.registers[register], 1)
         self.registers[register] -= 1
         self.registers[register] &= 255
         if self.registers[register] == 0: # Z - Set if result is zero.
             self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_Z)
+        else:
+            self.registers['F'] = utils.reset_bit(self.registers['F'], self.FLAG_Z)
+        if not borrow_bit_4:
+            self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_H)
+        else:
+            self.registers['F'] = utils.reset_bit(self.registers['F'], self.FLAG_H)
         self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_N) #  N - Set.
         self.registers['M'] = 1 # 1 M-time taken
         self.registers['T'] = 4 # 1 M-time taken
@@ -400,14 +411,14 @@ class Z80():
     #   C - Set for no borrow. (Set if A < n.)
     def op_cp_an(self, n):
         result = self.registers['A'] - n
-        self.registers['F'] = 0 # Clear flags
-        self.registers['F'] |= 0x40 # N - Set. Substraction flag
-        if self.registers['A'] == 0: # Z - Set if result is zero.
+        self.registers['F'] = 0x00 # Clear flags
+        self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_N) # N - Set. Substraction flag
+        if result == 0: # Z - Set if result is zero.
             self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_Z)
         if not utils.half_borrow_8_bit(self.registers['A'], n): # H - Set if no borrow from bit 4.
-            self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_C)
-        if result < 0: # C - Set for no borrow. (Set if A < n.)
             self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_H)
+        if not utils.borrow_8_bit(self.registers['A'], n): # C - Set for no borrow. (Set if A < n.)
+            self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_C)
         self.registers['M'] = 1 # 1 M-time taken
         self.registers['T'] = 4 # 1 M-time taken
 
@@ -421,11 +432,11 @@ class Z80():
     # Use with: n = BC,DE,HL,SP
     def op_add_hln(self, value):
         hlm_value = self.rw_16b_register('H', 'L')
-        if utils.carry_half_carry_16_bit(hlm_value, value):
+        if utils.half_carry_16_bit(hlm_value, value):
             half_carry = True
         else:
             half_carry = False
-        if utils.carry_carry_16_bit(hlm_value, value):
+        if utils.carry_16_bit(hlm_value, value):
             carry = True
         else:
             carry = False
@@ -462,8 +473,7 @@ class Z80():
         self.registers['T'] = 8 # 2 M-time taken
 
     def op_ld_r1de(self, r_dst):
-        addr = utils.bytes_to_16(self.registers['D'], self.registers['E'])
-        self.registers[r_dst] = self.MMU.rb(addr) # Read from address
+        self.registers[r_dst] = self.rb_16b_register('D', 'E') # Read from address
         self.registers['M'] = 2 # 2 M-time taken
         self.registers['T'] = 8 # 2 M-time taken
 
@@ -532,7 +542,7 @@ class Z80():
     #   C - Contains old bit 7 data.
     def op_rlc_common(self, value):
         old_bit_7_data = utils.get_bit(value, 7)
-        value = value << 8 + old_bit_7_data # Rotate A left
+        value = (value << 8) + old_bit_7_data # Rotate A left
         value &= 255
         if value == 0: # Z - Set if result is zero.
             self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_Z)
@@ -561,16 +571,33 @@ class Z80():
     #   H - Reset.
     #   C - Contains old bit 7 data.
     def op_rl_common(self, value):
+        old_carry_flag = utils.get_bit(self.registers['F'], self.FLAG_C)
         old_bit_7_data = utils.get_bit(value, 7)
-        old_bit_4_data = utils.get_bit(value, 4)
-        value = value << 8 + old_bit_4_data # Rotate A left through Carry flag.
-        value &= 255
+        value = (value << 1) + old_carry_flag # Rotate A left through Carry flag.
+        value &= 0xFF
         if value == 0: # Z - Set if result is zero.
             self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_Z)
         else:
             self.registers['F'] = utils.reset_bit(self.registers['F'], self.FLAG_Z)
         self.registers['F'] = utils.reset_bit(self.registers['F'], self.FLAG_H) #  H - Reset.
         self.registers['F'] = utils.reset_bit(self.registers['F'], self.FLAG_N) #  N - Reset.
+        if old_bit_7_data == 1:
+            self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_C) #  C - Contains old bit 7 data
+        else:
+            self.registers['F'] = utils.reset_bit(self.registers['F'], self.FLAG_C) #  C - Contains old bit 7 data
+        self.registers['M'] = 2 # 2 M-time taken
+        self.registers['T'] = 8 # 2 M-time taken
+
+        return value
+
+    def op_rla(self):
+        value = self.registers['A']
+        old_carry_flag = utils.get_bit(self.registers['F'], self.FLAG_C)
+        old_bit_7_data = utils.get_bit(value, 7)
+        value = (value << 1) + old_carry_flag # Rotate A left through Carry flag.
+        value &= 0xFF
+        self.registers['A'] = value
+        self.registers['F'] = 0x00
         if old_bit_7_data == 1:
             self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_C) #  C - Contains old bit 7 data
         else:
@@ -875,37 +902,37 @@ class Z80():
         self.registers['T'] = 8 # 2 M-time taken
 
     def and_aa(self):
-        self.op_and_an(self.registers['A'])
+        self.op_and_n(self.registers['A'])
 
     def and_ab(self):
-        self.op_and_an(self.registers['B'])
+        self.op_and_n(self.registers['B'])
 
     def and_ac(self):
-        self.op_and_an(self.registers['C'])
+        self.op_and_n(self.registers['C'])
 
     def and_ad(self):
-        self.op_and_an(self.registers['D'])
+        self.op_and_n(self.registers['D'])
 
     def and_ae(self):
-        self.op_and_an(self.registers['E'])
+        self.op_and_n(self.registers['E'])
 
     def and_ah(self):
-        self.op_and_an(self.registers['H'])
+        self.op_and_n(self.registers['H'])
 
     def and_al(self):
-        self.op_and_an(self.registers['L'])
+        self.op_and_n(self.registers['L'])
 
     def and_ahl(self):
         addr = utils.bytes_to_16(self.registers['H'], self.registers['L'])
         value = self.MMU.rb(addr)
-        self.op_and_an(value)
+        self.op_and_n(value)
         self.registers['M'] = 8 # 2 M-time taken
         self.registers['T'] = 8 # 2 M-time taken
 
     def and_an(self):
         value = self.registers['PC']
         self.registers['PC'] += 1
-        self.op_and_an(value)
+        self.op_and_n(value)
         self.registers['M'] = 2 # 2 M-time taken
         self.registers['T'] = 8 # 2 M-time taken
 
@@ -997,20 +1024,21 @@ class Z80():
 
     # ADD SP,n
     # Use with: one byte signed immediate value (#).
+    # Use with: n = one byte signed immediate value (#).
     # Flags affected:
     #   Z - Reset.
     #   N - Reset.
     #   H - Set or reset according to operation.
     #   C - Set or reset according to operation.
     def addspn():
-        n = self.MMU.rb(self.registers['PC'])
+        n = utils.signed_8b(self.MMU.rb(self.registers['PC']))
         self.registers['PC'] += 1
         sp_value = self.registers['SP']
-        if utils.carry_half_carry_16_bit(sp_value, n):
+        if utils.half_carry_16_bit(sp_value, n):
             half_carry = True
         else:
             half_carry = False
-        if utils.carry_carry_16_bit(sp_value, n):
+        if utils.carry_16_bit(sp_value, n):
             carry = True
         else:
             carry = False
@@ -1882,15 +1910,31 @@ class Z80():
 
     # LD HL,SP+n
     # Put SP + n effective address into HL.
+    # Use with: n = one byte signed immediate value.
+    # Flags affected:
+    #   Z - Reset.
+    #   N - Reset.
+    #   H - Set or reset according to operation.
+    #   C - Set or reset according to operation.
     def ldhlspplusn(self):
         n = self.MMU.rb(self.registers['PC'])
         self.registers['PC'] += 1
         addr = self.registers['SP'] + n
-        self.registers['H'] = addr >> 8
-        self.registers['L'] = addr & 0xFF
-        self.registers['SP'] = value
-        self.registers['M'] = 5 # 5 M-time taken
-        self.registers['T'] = 20 # 5 M-time taken
+        carry = utils.half_carry_16_bit(self.registers['SP'], n)
+        half_carry = utils.carry_16_bit(self.registers['SP'], n)
+        self.ww_16b_register(self.registers['H'], self.registers['L'], addr)
+        self.registers['F'] = utils.reset_bit(self.registers['F'], self.FLAG_Z)
+        self.registers['F'] = utils.reset_bit(self.registers['F'], self.FLAG_N)
+        if half_carry:
+            self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_H)
+        else:
+            self.registers['F'] = utils.reset_bit(self.registers['F'], self.FLAG_H)
+        if carry:
+            self.registers['F'] = utils.set_bit(self.registers['F'], self.FLAG_C)
+        else:
+            self.registers['F'] = utils.reset_bit(self.registers['F'], self.FLAG_C)
+        self.registers['M'] = 4 # 4 M-time taken
+        self.registers['T'] = 16 # 4 M-time taken
 
     # LD n,A
     # Put value nn into n
@@ -2194,13 +2238,13 @@ class Z80():
     #   cc = NC, Jump if C flag is reset.
     #   cc = C, Jump if C flag is set.
     def jrnz(self):
-        param = self.MMU.rb(self.registers['PC'])
+        param = utils.signed_8b(self.MMU.rb(self.registers['PC']))
         self.registers['PC'] += 1
         self.registers['M'] = 2 # 2 M-time taken
         self.registers['T'] = 8 # 2 M-time taken
         if not utils.test_bit(self.registers['F'], self.FLAG_Z):
             self.registers['PC'] += param
-            self.registers['PC'] &= 255
+            self.registers['PC'] &= 0xFFFF
             self.registers['M'] += 1 # 1 extra M-time taken
             self.registers['T'] += 4 # 1 extra M-time taken
 
@@ -2213,12 +2257,13 @@ class Z80():
     #   cc = NC, Jump if C flag is reset.
     #   cc = C, Jump if C flag is set.
     def jrz(self):
-        param = self.MMU.rb(self.registers['PC'])
+        param = utils.signed_8b(self.MMU.rb(self.registers['PC']))
         self.registers['PC'] += 1
         self.registers['M'] = 2 # 2 M-time taken
         self.registers['T'] = 8 # 2 M-time taken
         if utils.test_bit(self.registers['F'], self.FLAG_Z):
             self.registers['PC'] += param
+            self.registers['PC'] &= 0xFFFF
             self.registers['M'] += 1 # 1 extra M-time taken
             self.registers['T'] += 4 # 1 extra M-time taken
 
@@ -2249,7 +2294,7 @@ class Z80():
     #   cc = NC, Jump if C flag is reset.
     #   cc = C, Jump if C flag is set.
     def jrc(self):
-        param = self.MMU.rb(self.registers['PC'])
+        param = utils.signed_8b(self.MMU.rb(self.registers['PC']))
         self.registers['PC'] += 1
         self.registers['M'] = 2 # 2 M-time taken
         self.registers['T'] = 8 # 2 M-time taken
@@ -2263,9 +2308,10 @@ class Z80():
     # Use with:
     #   n = one byte signed immediate value
     def jrr8(self):
-        param = self.MMU.rb(self.registers['PC'])
+        param = utils.signed_8b(self.MMU.rb(self.registers['PC']))
         self.registers['PC'] += 1
         self.registers['PC'] += param
+        self.registers['PC'] &= 0xFFFF
         self.registers['M'] = 3 # 3 M-time taken
         self.registers['T'] = 12 # 3 M-time taken
 
@@ -2277,6 +2323,7 @@ class Z80():
         param = self.MMU.rw(self.registers['PC'])
         self.registers['PC'] += 2
         self.registers['PC'] = param
+        self.registers['PC'] &= 0xFFFF
         self.registers['M'] = 3 # 3 M-time taken
         self.registers['T'] = 12 # 12 M-time taken
 
@@ -2398,37 +2445,37 @@ class Z80():
     #   H - Set if no borrow from bit 4.
     #   C - Not affected.
     def cpa(self):
-        self.op_cp(self.registers['A'])
+        self.op_cp_an(self.registers['A'])
 
     def cpb(self):
-        self.op_cp(self.registers['B'])
+        self.op_cp_an(self.registers['B'])
 
     def cpc(self):
-        self.op_cp(self.registers['C'])
+        self.op_cp_an(self.registers['C'])
 
     def cpd(self):
-        self.op_cp(self.registers['D'])
+        self.op_cp_an(self.registers['D'])
 
     def cpe(self):
-        self.op_cp(self.registers['E'])
+        self.op_cp_an(self.registers['E'])
 
     def cph(self):
-        self.op_cp(self.registers['H'])
+        self.op_cp_an(self.registers['H'])
 
     def cpl(self):
-        self.op_cp(self.registers['L'])
+        self.op_cp_an(self.registers['L'])
 
     def cphl(self):
         value = self.MMU.rb(utils.bytes_to_16(self.registers['H'],
             self.registers['L']))
-        self.op_cp(value)
+        self.op_cp_an(value)
         self.registers['M'] = 2 # 2 M-time taken
         self.registers['T'] = 8 # 8 M-time taken
 
     def cpn(self):
         value = self.MMU.rb(self.registers['PC'])
         self.registers['PC'] += 1
-        self.op_cp(value)
+        self.op_cp_an(value)
         self.registers['M'] = 2 # 2 M-time taken
         self.registers['T'] = 8 # 8 M-time taken
 
@@ -2487,7 +2534,7 @@ class Z80():
     #   H - Reset.
     #   C - Contains old bit 7 data
     def rla(self):
-        self.op_rl_register('A')
+        self.op_rla()
         self.registers['M'] = 1 # 1 M-time taken
         self.registers['T'] = 4 # 1 M-time taken
 
@@ -2758,37 +2805,37 @@ class Z80():
         else:
             self.registers['PC'] += 2
             self.registers['M'] = 3
-            self.registers['M'] = 12
+            self.registers['T'] = 12
 
     def callznn(self):
         if utils.get_bit(self.registers['F'], self.FLAG_Z):
             self.callnn()
             self.registers['M'] = 6
-            self.registers['M'] = 24
+            self.registers['T'] = 24
         else:
             self.registers['PC'] += 2
             self.registers['M'] = 3
-            self.registers['M'] = 12
+            self.registers['T'] = 12
 
     def callncnn(self):
         if not utils.get_bit(self.registers['F'], self.FLAG_C):
             self.callnn()
             self.registers['M'] = 6
-            self.registers['M'] = 24
+            self.registers['T'] = 24
         else:
             self.registers['PC'] += 2
             self.registers['M'] = 3
-            self.registers['M'] = 12
+            self.registers['T'] = 12
 
     def callcnn(self):
         if utils.get_bit(self.registers['F'], self.FLAG_C):
             self.callnn()
             self.registers['M'] = 6
-            self.registers['M'] = 24
+            self.registers['T'] = 24
         else:
             self.registers['PC'] += 2
             self.registers['M'] = 3
-            self.registers['M'] = 12
+            self.registers['T'] = 12
 
     def rst00(self):
         self.op_rst(0x00)
@@ -2818,43 +2865,43 @@ class Z80():
         addr = self.pop_16b_from_stack()
         self.registers['PC'] = addr
         self.registers['M'] = 4 # 4 M-time taken
-        self.registers['M'] = 16 # 4 M-time taken
+        self.registers['T'] = 16 # 4 M-time taken
 
     def retnz(self):
         if not utils.get_bit(self.registers['F'], self.FLAG_Z):
             self.ret()
             self.registers['M'] = 5 # 5 M-time taken
-            self.registers['M'] = 20 # 5 M-time taken
+            self.registers['T'] = 20 # 5 M-time taken
         else:
             self.registers['M'] = 2 # 2 M-time taken
-            self.registers['M'] = 8 # 2 M-time taken
+            self.registers['T'] = 8 # 2 M-time taken
 
     def retz(self):
         if utils.get_bit(self.registers['F'], self.FLAG_Z):
             self.ret()
             self.registers['M'] = 5 # 5 M-time taken
-            self.registers['M'] = 20 # 5 M-time taken
+            self.registers['T'] = 20 # 5 M-time taken
         else:
             self.registers['M'] = 2 # 2 M-time taken
-            self.registers['M'] = 8 # 2 M-time taken
+            self.registers['T'] = 8 # 2 M-time taken
 
     def retnc(self):
         if not utils.get_bit(self.registers['F'], self.FLAG_C):
             self.ret()
             self.registers['M'] = 5 # 5 M-time taken
-            self.registers['M'] = 20 # 5 M-time taken
+            self.registers['T'] = 20 # 5 M-time taken
         else:
             self.registers['M'] = 2 # 2 M-time taken
-            self.registers['M'] = 8 # 2 M-time taken
+            self.registers['T'] = 8 # 2 M-time taken
 
     def retc(self):
         if utils.get_bit(self.registers['F'], self.FLAG_C):
             self.ret()
             self.registers['M'] = 5 # 5 M-time taken
-            self.registers['M'] = 20 # 5 M-time taken
+            self.registers['T'] = 20 # 5 M-time taken
         else:
             self.registers['M'] = 2 # 2 M-time taken
-            self.registers['M'] = 8 # 2 M-time taken
+            self.registers['T'] = 8 # 2 M-time taken
 
     # RETI
     # Pop two bytes from stack & jump to that address then enable interrupts.
@@ -2985,9 +3032,6 @@ class Z80():
         self.registers['M'] = 1 # 1 M-time taken
         self.registers['T'] = 4 # 1 M-time taken
 
-    def todo(self):
-        pass
-
     MAP = {
         0x00: nop,
         0x01: ldbcnn,
@@ -3025,20 +3069,18 @@ class Z80():
         0x21: ldhlnn,
         0x22: ldhlplusa,
         0x23: inchl,
-        0x24: todo,
+        0x24: inch,
         0x25: dech,
         0x26: ldhd8,
         0x27: daa,
-        0x28: todo,
-        0x29: addhlhl,
-        0x2E: todo,
-        0x2F: cpl,
         0x28: jrz,
+        0x29: addhlhl,
         0x2A: ldahlplus,
         0x2B: dechl,
         0x2C: incl,
         0x2D: decl,
         0x2E: ldld8,
+        0x2F: cpl,
         0x30: jrnc,
         0x31: ldspnn,
         0x32: ldhlminusa,
@@ -3505,6 +3547,7 @@ class Z80():
 
     def dispatcher(self):
         op = self.MMU.rb(self.registers['PC'])      # Fetch instruction
+        current_pc = self.registers['PC']
         self.registers['PC'] += 1                   # Increment Program counter
         if op == 0xCB:
             op = self.MMU.rb(self.registers['PC'])  # Fetch CB instruction
@@ -3516,9 +3559,13 @@ class Z80():
             self.MAP[op](self)                      # Dispatch
             self.current_op = op
             self.current_op_name = self.MAP[op].__name__
+        print(hex(current_pc), hex(op), self.current_op_name)
         self.registers['PC'] &= 0xFFFF              # Mask PC to 16 bits
         self.clock['T'] += self.registers['T']      # Add time to CPU clock
         self.clock['M'] += self.registers['M']
+
+        frame_number = self.GPU.ppu_step()
+        return current_pc, op, frame_number
 
     def load_rom(self, filename):
         self.MMU.load(filename)
