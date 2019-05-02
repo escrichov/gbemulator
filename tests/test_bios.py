@@ -7,7 +7,7 @@ class TestBIOS(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        self.cpu = Z80()
+        self.cpu = Z80(headless=True)
         self.cpu.load_rom("roms/bgbtest.gb")
 
     def test_bios(self):
@@ -1517,6 +1517,125 @@ class TestBIOS(unittest.TestCase):
         self.assertEqual(self.cpu.clock['M'], clock_m)
         self.assertEqual(self.cpu.clock['T'], clock_m * 4)
         self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x3E) # LD A,19
+
+        self.cpu.dispatcher()
+
+        self.assertEqual(self.cpu.registers['A'], 0x19)
+        self.assertEqual(self.cpu.registers['B'], 0x00)
+        self.assertEqual(self.cpu.registers['C'], 0x73)
+        self.assertEqual(self.cpu.registers['D'], 0x00)
+        self.assertEqual(self.cpu.registers['E'], 0xE0)
+        self.assertEqual(self.cpu.registers['H'], 0x81)
+        self.assertEqual(self.cpu.registers['L'], 0xA0)
+        self.assertEqual(self.cpu.registers['F'], 0xC0)
+        self.assertEqual(self.cpu.registers['SP'], 0xFFFE)
+        self.assertEqual(self.cpu.registers['PC'], 0x42)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0xEA) # LD (0x9910), A
+
+        self.cpu.dispatcher()
+
+        self.assertEqual(self.cpu.MMU.vram[0x9910 & 0x1FFF], 0x19)
+        self.assertEqual(self.cpu.registers['A'], 0x19)
+        self.assertEqual(self.cpu.registers['B'], 0x00)
+        self.assertEqual(self.cpu.registers['C'], 0x73)
+        self.assertEqual(self.cpu.registers['D'], 0x00)
+        self.assertEqual(self.cpu.registers['E'], 0xE0)
+        self.assertEqual(self.cpu.registers['H'], 0x81)
+        self.assertEqual(self.cpu.registers['L'], 0xA0)
+        self.assertEqual(self.cpu.registers['F'], 0xC0)
+        self.assertEqual(self.cpu.registers['SP'], 0xFFFE)
+        self.assertEqual(self.cpu.registers['PC'], 0x45)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x21) # HL,0x992F
+
+        while self.cpu.registers['PC'] != 0x4D:
+            self.cpu.dispatcher()
+
+        self.assertEqual(self.cpu.registers['A'], 0x18)
+        self.assertEqual(self.cpu.registers['B'], 0x00)
+        self.assertEqual(self.cpu.registers['C'], 0x0C)
+        self.assertEqual(self.cpu.registers['D'], 0x00)
+        self.assertEqual(self.cpu.registers['E'], 0xE0)
+        self.assertEqual(self.cpu.registers['H'], 0x99)
+        self.assertEqual(self.cpu.registers['L'], 0x2F)
+        self.assertEqual(self.cpu.registers['F'], 0x40)
+        self.assertEqual(self.cpu.registers['SP'], 0xFFFE)
+        self.assertEqual(self.cpu.registers['PC'], 0x4D)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x32) # LDD (HL), A
+
+        self.cpu.dispatcher()
+
+        self.assertEqual(self.cpu.MMU.rb(0x992F), 0x18)
+        self.assertEqual(self.cpu.registers['A'], 0x18)
+        self.assertEqual(self.cpu.registers['B'], 0x00)
+        self.assertEqual(self.cpu.registers['C'], 0x0C)
+        self.assertEqual(self.cpu.registers['D'], 0x00)
+        self.assertEqual(self.cpu.registers['E'], 0xE0)
+        self.assertEqual(self.cpu.registers['H'], 0x99)
+        self.assertEqual(self.cpu.registers['L'], 0x2E)
+        self.assertEqual(self.cpu.registers['F'], 0x40)
+        self.assertEqual(self.cpu.registers['SP'], 0xFFFE)
+        self.assertEqual(self.cpu.registers['PC'], 0x4E)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x0D) # DEC C
+
+        while self.cpu.registers['PC'] != 0x4D:
+            self.cpu.dispatcher()
+
+        self.assertEqual(self.cpu.registers['A'], 0x17)
+        self.assertEqual(self.cpu.registers['B'], 0x00)
+        self.assertEqual(self.cpu.registers['C'], 0x0B)
+        self.assertEqual(self.cpu.registers['D'], 0x00)
+        self.assertEqual(self.cpu.registers['E'], 0xE0)
+        self.assertEqual(self.cpu.registers['H'], 0x99)
+        self.assertEqual(self.cpu.registers['L'], 0x2E)
+        self.assertEqual(self.cpu.registers['F'], 0x40)
+        self.assertEqual(self.cpu.registers['SP'], 0xFFFE)
+        self.assertEqual(self.cpu.registers['PC'], 0x4D)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x32) # LDD (HL), A
+
+        self.cpu.dispatcher()
+
+        self.assertEqual(self.cpu.MMU.rb(0x992E), 0x17)
+        self.assertEqual(self.cpu.registers['A'], 0x17)
+        self.assertEqual(self.cpu.registers['B'], 0x00)
+        self.assertEqual(self.cpu.registers['C'], 0x0B)
+        self.assertEqual(self.cpu.registers['D'], 0x00)
+        self.assertEqual(self.cpu.registers['E'], 0xE0)
+        self.assertEqual(self.cpu.registers['H'], 0x99)
+        self.assertEqual(self.cpu.registers['L'], 0x2D)
+        self.assertEqual(self.cpu.registers['F'], 0x40)
+        self.assertEqual(self.cpu.registers['SP'], 0xFFFE)
+        self.assertEqual(self.cpu.registers['PC'], 0x4E)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x0D) # DEC C
+
+        while self.cpu.registers['PC'] != 0x4D:
+            self.cpu.dispatcher()
+
+        self.assertEqual(self.cpu.registers['A'], 0x16)
+        self.assertEqual(self.cpu.registers['B'], 0x00)
+        self.assertEqual(self.cpu.registers['C'], 0x0A)
+        self.assertEqual(self.cpu.registers['D'], 0x00)
+        self.assertEqual(self.cpu.registers['E'], 0xE0)
+        self.assertEqual(self.cpu.registers['H'], 0x99)
+        self.assertEqual(self.cpu.registers['L'], 0x2D)
+        self.assertEqual(self.cpu.registers['F'], 0x40)
+        self.assertEqual(self.cpu.registers['SP'], 0xFFFE)
+        self.assertEqual(self.cpu.registers['PC'], 0x4D)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x32) # LDD (HL), A
+
+        self.cpu.dispatcher()
+
+        self.assertEqual(self.cpu.MMU.rb(0x992D), 0x16)
+        self.assertEqual(self.cpu.registers['A'], 0x16)
+        self.assertEqual(self.cpu.registers['B'], 0x00)
+        self.assertEqual(self.cpu.registers['C'], 0x0A)
+        self.assertEqual(self.cpu.registers['D'], 0x00)
+        self.assertEqual(self.cpu.registers['E'], 0xE0)
+        self.assertEqual(self.cpu.registers['H'], 0x99)
+        self.assertEqual(self.cpu.registers['L'], 0x2C)
+        self.assertEqual(self.cpu.registers['F'], 0x40)
+        self.assertEqual(self.cpu.registers['SP'], 0xFFFE)
+        self.assertEqual(self.cpu.registers['PC'], 0x4E)
+        self.assertEqual(self.cpu.MMU.rb(self.cpu.registers['PC']), 0x0D) # DEC C
 
         self.cpu.dispatcher()
         while self.cpu.registers['PC'] != 0x51:

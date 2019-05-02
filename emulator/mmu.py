@@ -102,6 +102,8 @@ class MMU():
             return
         elif addr_mask in [0x8000, 0x9000]: # Graphics: vram (8k)
             # Write to GPU
+            if addr >= 0x9904 and addr <= 0x992F:
+                print("ENTRAAA!!!", hex(addr), hex(val))
             self.vram[addr & 0x1FFF] = val
             self.cpu.GPU.update_tile(addr, val)
             return

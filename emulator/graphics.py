@@ -64,21 +64,22 @@ class Frame():
 
 
 class Window(pyglet.window.Window):
-    def __init__(self, caption_text):
+    def __init__(self, caption_text, show_fps=False):
         width = 160
         height = 140
         super(Window, self).__init__(width=width, height=height, style=pyglet.window.Window.WINDOW_STYLE_DIALOG, vsync=False)
         self.set_visible()
         self.set_caption(caption_text)
-        self.fps_display = pyglet.clock.ClockDisplay()
-        self.label = pyglet.text.Label('Hello, world!')
+        self.show_fps = show_fps
+        if self.show_fps:
+            self.fps_display = pyglet.clock.ClockDisplay()
         self.frame = Frame(width, height)
 
     def on_draw(self):
         self.clear()
-        self.label.draw()
         self.frame.draw()
-        self.fps_display.draw()
+        if self.show_fps:
+            self.fps_display.draw()
 
     def on_key_press(self, symbol, modifiers):
         if symbol == key.Z:

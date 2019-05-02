@@ -250,12 +250,12 @@ class GPU():
         mapoffs += (self.line // 8) * 0x20
 
         # Which tile to start with in the map line
-        #lineoffs = (self.scx >> 3)
-        lineoffs = 0x00
+        lineoffs = (self.scx >> 3)
+        #lineoffs = 0x00
 
         # Which line of pixels to use in the tiles
-        #y = (self.line + self.scy) & 7
-        y = self.line % 8
+        y = (self.line + self.scy) & 7
+        #y = self.line % 8
 
         # Where in the tileline to start
         #x = self.scx & 7
@@ -263,7 +263,7 @@ class GPU():
 
         # Read tile index from the background map
         base_addr = (mapoffs + lineoffs)
-        addr = (mapoffs + lineoffs) & 0x1FFE
+        addr = (mapoffs + lineoffs) & 0x1FFF
         tile = self.cpu.MMU.vram[addr]
 
         # If the tile data set in use is #1, the
@@ -278,7 +278,8 @@ class GPU():
             # Plot the pixel to canvas
             #print(tile, y, x, colour)
             #print("Canvas", hex(base_addr), tile, i, self.line, x, y)
-            self.window.frame.set_pixel(i, self.line, colour)
+            if self.window:
+                self.window.frame.set_pixel(i, self.line, colour)
 
             # When this tile ends, read another
             x += 1
@@ -286,7 +287,7 @@ class GPU():
                 x = 0
                 lineoffs = (lineoffs + 1) & 0x1F
                 base_addr = (mapoffs + lineoffs)
-                addr = (mapoffs + lineoffs) & 0x1FFE
+                addr = (mapoffs + lineoffs) & 0x1FFF
                 tile = self.cpu.MMU.vram[addr]
                 #if self.bg_tile == 1 and tile < 128:
                 #    tile += 256
@@ -313,7 +314,8 @@ class GPU():
     def write_canvas(self):
         #self.write_background_tiles(26)
         #self.write_tile_map()
-        self.window.frame.sync()
+        if self.window:
+            self.window.frame.sync()
 
     def write_tile_map(self):
         init_address = 0x9800
@@ -323,8 +325,9 @@ class GPU():
                 x_frame_begin = y * 8
                 y_frame_begin = x * 8
                 base_addr = init_address + (0x20 * x) + y
-                addr = base_addr & 0x1FFE
+                addr = base_addr & 0x1FFF
                 tile_number = self.cpu.MMU.vram[addr]
+                print(hex(base_addr), hex(self.cpu.MMU.vram[addr]))
                 self.write_tile(tile_number, x_frame_begin, y_frame_begin)
 
     def write_tile(self, tile_number, x_screen, y_screen):
@@ -332,7 +335,8 @@ class GPU():
         for x in range(0, 8):
             for y in range(0, 8):
                 colour = self.BG_PALETTE[tile[y][x]]
-                self.window.frame.set_pixel(x+x_screen, y+y_screen, colour)
+                if self.window:
+                    self.window.frame.set_pixel(x+x_screen, y+y_screen, colour)
 
     def write_background_tiles(self, max_number):
         for i in range(0, max_number):

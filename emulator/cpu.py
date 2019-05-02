@@ -53,8 +53,11 @@ class Z80():
 
     current_op = 0
 
-    def __init__(self):
-        self.window = graphics.Window('Gameboy')
+    def __init__(self, headless=False):
+        if not headless:
+            self.window = graphics.Window('Gameboy')
+        else:
+            self.window = None
         self.GPU = GPU(self, self.window)
         self.MMU = MMU(self)
 
@@ -1959,11 +1962,8 @@ class Z80():
         self.registers['T'] = 8 # 2 M-time taken
 
     def ldnna(self):
-        byte_high = self.MMU.rb(self.registers['PC'])
-        self.registers['PC'] += 1
-        byte_low = self.MMU.rb(self.registers['PC'])
-        self.registers['PC'] += 1
-        addr = utils.bytes_to_16(byte_high, byte_low)
+        addr = self.MMU.rw(self.registers['PC'])
+        self.registers['PC'] += 2
         self.MMU.wb(addr, self.registers['A'])
         self.registers['M'] = 4  # 4 M-time taken
         self.registers['T'] = 16 # 4 M-time taken
